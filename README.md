@@ -32,11 +32,12 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 async def my_view(data: dict):
-    await save_data_to_db(data)
+    # Write your code here
     return True
 
 def serve():
     loop = asyncio.get_event_loop()
+    # Inherit from CorrelationManager for custom correlation storages
     app = DatabusApp(conf=Configuration(), correlation_manager=PostgresCorrelationManager)
     app.add_route(r'^CASH_REGISTER_EQUIPMENTS[a-zA-Z_]{4}$', my_view, as_list=True)
     app.start(loop)
