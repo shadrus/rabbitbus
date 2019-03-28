@@ -104,6 +104,8 @@ class DatabusApp:
         except aioamqp.AmqpClosedConnection:
             logging.debug("AmqpClosedConnection, will call on_error")
         except (OSError, ConnectionRefusedError) as e:
+            if not transport.is_closing():
+                await transport.close()
             if reconnect:
                 logger.warning(str(e))
                 await asyncio.sleep(reconnect_wait_period)
