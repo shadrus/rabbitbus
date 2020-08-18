@@ -48,8 +48,11 @@ class RouteManager:
 
 
 class DatabusApp:
-    def __init__(self, conf: Configuration, correlation_manager: CorrelationManager, max_workers=10):
-        self.correlation_manager = correlation_manager()
+    def __init__(self, conf: Configuration, correlation_manager: CorrelationManager = None, max_workers=10):
+        if correlation_manager:
+            self.correlation_manager = correlation_manager()
+        else:
+            self.correlation_manager = None
         self.conf = conf
         self.router = RouteManager()
         self.task_queue = asyncio.Queue()
@@ -76,7 +79,7 @@ class DatabusApp:
 
     async def _serve_message(self, channel: Channel, body, envelope: Envelope, properties: Properties):
         try:
-            if envelope.routing_key == self.conf.queue_name:
+            if envelope.routing_key == self.conf.queue_name and self.correlation_manager:
                 routing_key = await self._get_routing_key_for_rpc(properties.correlation_id)
             else:
                 routing_key = envelope.routing_key
