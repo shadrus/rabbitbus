@@ -21,7 +21,9 @@ Example:
 ```python
 import asyncio
 import logging
-from bus.manager import DatabusApp, Configuration, PostgresCorrelationManager
+from rubbitbus.manager import DatabusApp, Configuration, PostgresCorrelationManager
+from rubbitbus.requests import AmqpRequest
+from rubbitbus.responses import AmqpResponse
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -31,9 +33,9 @@ ch.setLevel(logging.DEBUG)
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-async def my_view(data: dict):
+async def my_view(request: AmqpRequest):
     # Write your code here
-    return True
+    return AmqpResponse()
 
 def serve():
     loop = asyncio.get_event_loop()
