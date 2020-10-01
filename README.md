@@ -21,9 +21,9 @@ Example:
 ```python
 import asyncio
 import logging
-from rubbitbus.manager import DatabusApp, Configuration, PostgresCorrelationManager
-from rubbitbus.requests import AmqpRequest
-from rubbitbus.responses import AmqpResponse
+from rabbitbus.manager import DatabusApp, Configuration
+from rabbitbus.requests import AmqpRequest
+from rabbitbus.responses import AckResponse
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -35,12 +35,12 @@ logger.addHandler(ch)
 
 async def my_view(request: AmqpRequest):
     # Write your code here
-    return AmqpResponse()
+    return AckResponse()
 
 def serve():
     loop = asyncio.get_event_loop()
     # Inherit from CorrelationManager for custom correlation storages
-    app = DatabusApp(conf=Configuration(), correlation_manager=PostgresCorrelationManager)
+    app = DatabusApp(conf=Configuration())
     app.add_route(r'^CASH_REGISTER_EQUIPMENTS[a-zA-Z_]{4}$', my_view, as_list=True)
     app.start(loop)
 
