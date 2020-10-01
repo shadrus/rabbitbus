@@ -13,7 +13,7 @@ RabbitBus requires Python 3.6 >, aioamqp.
 Install the dependencies and library.
 
 ```sh
-$ pip install git+https://github.com/shadrus/rabbitbus.git
+$ pip install rabbitbus
 ```
 
 Example:

@@ -13,12 +13,12 @@ from setuptools import find_packages, setup, Command
 
 # Package meta-data.
 NAME = 'rabbitbus'
-DESCRIPTION = 'Lite Rabbit framework'
+DESCRIPTION = 'RabbitMQ app framework'
 URL = 'http://gitlab.rednvd.ru/krylov/rabbitbus'
 EMAIL = 'krylov.ys@malltech.ru'
 AUTHOR = 'KrylovYS'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.3'
+VERSION = '0.0.5'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -103,7 +103,7 @@ setup(
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
     url=URL,
-    packages=find_packages(exclude=('tests',)),
+    packages=find_packages(exclude=('tests', 'test_app')),
     # If your package is a single module, use this instead of 'packages':
     # py_modules=['mypackage'],
 
