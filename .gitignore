@@ -153,3 +153,5 @@ fabric.properties
 
 uploads/*.jpeg
 uploads/*.png
+
+test_app/
