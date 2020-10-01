@@ -127,14 +127,14 @@ class DatabusApp:
                 raise e
 
     async def __set_response(self, request: AmqpRequest, response: Union[AckResponse, NackResponse, None], worker_id):
-        if response and isinstance(response, AckResponse):
-            if request.envelope.delivery_tag:
-                await request.channel.basic_client_ack(delivery_tag=request.envelope.delivery_tag)
+        if isinstance(response, AckResponse):
             if request.properties.reply_to:
                 pass  # TODO send data to exchange
+            if request.envelope.delivery_tag:
+                await request.channel.basic_client_ack(delivery_tag=request.envelope.delivery_tag)
             logger.debug("Worker %s completed the task" % worker_id)
         else:
-            logger.warning("Router handler %s doesn't returned anything for request %s or returned NackResponse" % (request.body, worker_id))
+            logger.warning("Router handler %s doesn't returned valid response or returned NackResponse" % request.body)
             if request.envelope.delivery_tag:
                 await request.channel.basic_client_nack(delivery_tag=request.envelope.delivery_tag)
             await asyncio.sleep(self.sleep_interval)
