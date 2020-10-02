@@ -9,8 +9,8 @@ from aioamqp.channel import Channel
 from aioamqp.envelope import Envelope
 from aioamqp.properties import Properties
 
-from requests import AmqpRequest
-from responses import AckResponse, NackResponse
+from rabbitbus.acks.requests import AmqpRequest
+from rabbitbus.acks.responses import AckResponse, NackResponse
 
 logger = logging.getLogger(__name__)
 
