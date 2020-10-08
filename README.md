@@ -24,8 +24,8 @@ Example:
 import asyncio
 import logging
 from rabbitbus.manager import DatabusApp, Configuration
-from acks.requests import AmqpRequest
-from acks.responses import AckResponse
+from rabbitbus.acks.requests import AmqpRequest
+from rabbitbus.acks.responses import AckResponse
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
