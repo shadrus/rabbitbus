@@ -14,4 +14,8 @@ class AmqpRequest:
         self.properties = properties
 
     def json(self) -> dict:
+        """
+        Returns:
+            dict: converts json to dict
+        """
         return json.loads(self.body)

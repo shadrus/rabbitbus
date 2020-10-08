@@ -2,7 +2,7 @@ import asyncio
 import re
 import logging
 from time import sleep
-from typing import Dict, Coroutine, Tuple, Type, Awaitable, Callable, Union
+from typing import Dict, Coroutine, Tuple, Type, Awaitable, Callable, Union, Optional
 
 import aioamqp
 from aioamqp.channel import Channel
@@ -17,12 +17,26 @@ logger = logging.getLogger(__name__)
 
 class Configuration:
 
-    def __init__(self, rabbit_host,
-                 rabbit_username,
-                 rabbit_password,
-                 virtualhost,
-                 exchange_name,
-                 queue_name):
+    def __init__(self,
+                 rabbit_host: str,
+                 rabbit_username: str,
+                 rabbit_password: str,
+                 virtualhost: str,
+                 queue_name: str,
+                 rabbit_port: int = 5672,
+                 exchange_name: Optional[str] = None):
+        """
+        Configuration class to connect to RabbitMQ.
+        Args:
+            rabbit_host: the host to connect to
+            rabbit_username: login
+            rabbit_password: password
+            virtualhost: virtualhost
+            queue_name: queue to consume
+            rabbit_port: the port to connect to, default 5672
+            exchange_name: exchange for responses
+        """
+        self.rabbit_port = rabbit_port
         self.rabbit_host = rabbit_host
         self.rabbit_username = rabbit_username
         self.rabbit_password = rabbit_password
@@ -32,8 +46,19 @@ class Configuration:
 
 
 class CorrelationManager:
+    """
+    CorrelationManager is interface, that you should to implement if your app sends RPC somewhere to RabbitMQ
+    Read about RPC https://www.rabbitmq.com/tutorials/tutorial-six-python.html
+    """
 
     async def find_request_by_correlation_id(self, correlation_id: str) -> str:
+
+        """
+        Args:
+            correlation_id: correlation id from RPC
+        Returns:
+            str: real key
+        """
         raise NotImplementedError('You should implement this yourself')
 
 
@@ -50,12 +75,25 @@ class RouteManager:
 
 
 class DatabusApp:
+
     def __init__(self,
                  conf: Configuration,
                  correlation_manager: Type[CorrelationManager] = None,
                  max_workers: int = 10,
                  reconnect_interval: int = 10,
                  sleep_interval: int = 10):
+        """
+        Args:
+            conf: Configuration instance
+            correlation_manager: instance that implements CorrelationManager interface.
+                                 Is needed to convert reply routing key to real one. Useful for RPC requests.
+            max_workers: How many workers to create for consuming
+            reconnect_interval: seconds to wait for reconnect on disconnect
+            sleep_interval: seconds to sleep on exception
+
+        Examples:
+            >>> app = DatabusApp(conf=conf, max_workers=1, correlation_manager=ImplementedCorrelationManager)
+        """
         self.sleep_interval = sleep_interval
         self.reconnect_interval = reconnect_interval
         if correlation_manager:
@@ -67,10 +105,28 @@ class DatabusApp:
         self.task_queue: asyncio.Queue[Tuple[Callable[[AmqpRequest], Awaitable[None]], AmqpRequest]] = asyncio.Queue()
         self.max_workers = max_workers
 
-    def add_route(self, routing_key, view):
+    def add_route(self, routing_key: str, view):
+        """
+        Args:
+            routing_key: message with this routing key will be send to the view.
+            view: coroutine callable
+        Examples:
+            >>> async def my_view(request: AmqpRequest):
+            >>>    # Write your code here
+            >>>    return AckResponse()
+            >>> app = DatabusApp(conf=conf, max_workers=1)
+            >>> app.add_route(r'.*', my_view)
+        """
         self.router.add_route(routing_key, view)
 
     def add_routes(self, routes: Dict[str, Coroutine[Dict, None, None]]):
+        """
+        Args:
+            routes: create routes from dictionary.
+        Examples:
+            >>> routes = {'route_one': view1, 'route_two': view2}
+            >>> app.add_routes(routes)
+        """
         for key, view in routes.items():
             self.router.add_route(key, view)
 
