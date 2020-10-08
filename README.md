@@ -43,7 +43,7 @@ def serve():
     loop = asyncio.get_event_loop()
     # Inherit from CorrelationManager for custom correlation storages
     app = DatabusApp(conf=Configuration())
-    app.add_route(r'^CASH_REGISTER_EQUIPMENTS[a-zA-Z_]{4}$', my_view, as_list=True)
+    app.add_route(r'^CASH_REGISTER_EQUIPMENTS[a-zA-Z_]{4}$', my_view)
     app.start(loop)
 
 
