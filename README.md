@@ -1,3 +1,5 @@
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/rabbitbus)
+
 # RabbitBus
 
 Feel RabbitMQ like HTTP
