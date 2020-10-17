@@ -1,4 +1,4 @@
-language: go
+language: python
 deploy:
   provider: pypi
   username: __token__
