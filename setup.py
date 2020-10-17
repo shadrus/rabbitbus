@@ -18,7 +18,7 @@ URL = 'http://gitlab.rednvd.ru/krylov/rabbitbus'
 EMAIL = 'krylov.ys@malltech.ru'
 AUTHOR = 'KrylovYS'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.8'
+VERSION = '0.0.10'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -122,7 +122,7 @@ setup(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8'        
+        'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy'
     ],
