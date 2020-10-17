@@ -1,4 +1,5 @@
 language: python
+scripts: echo Working
 deploy:
   provider: pypi
   username: __token__
