@@ -18,7 +18,7 @@ URL = 'http://gitlab.rednvd.ru/krylov/rabbitbus'
 EMAIL = 'krylov.ys@malltech.ru'
 AUTHOR = 'KrylovYS'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.12'
+VERSION = '0.0.13'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
