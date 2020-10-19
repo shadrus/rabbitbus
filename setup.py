@@ -14,11 +14,11 @@ from setuptools import find_packages, setup, Command
 # Package meta-data.
 NAME = 'rabbitbus'
 DESCRIPTION = 'RabbitMQ app framework'
-URL = 'http://gitlab.rednvd.ru/krylov/rabbitbus'
+URL = 'https://github.com/shadrus/rabbitbus'
 EMAIL = 'krylov.ys@malltech.ru'
 AUTHOR = 'KrylovYS'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.13'
+VERSION = '0.0.14'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
