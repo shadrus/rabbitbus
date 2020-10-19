@@ -81,7 +81,7 @@ class DatabusApp:
                  correlation_manager: Type[CorrelationManager] = None,
                  max_workers: int = 10,
                  reconnect_interval: int = 10,
-                 sleep_interval: int = 10):
+                 sleep_interval: Union[int, None] = 10):
         """
         Args:
             conf: Configuration instance
@@ -100,10 +100,30 @@ class DatabusApp:
             self.correlation_manager = correlation_manager()
         else:
             self.correlation_manager = None
-        self.conf: Configuration = conf
-        self.router = RouteManager()
-        self.task_queue: asyncio.Queue[Tuple[Callable[[AmqpRequest], Awaitable[None]], AmqpRequest]] = asyncio.Queue()
-        self.max_workers = max_workers
+        self.__conf: Configuration = conf
+        self.__router = RouteManager()
+        self.__task_queue: asyncio.Queue[Tuple[Callable[[AmqpRequest], Awaitable[None]], AmqpRequest]] = asyncio.Queue()
+        self.__max_workers = max_workers
+        self.__consuming_semaphore = asyncio.Semaphore(1)
+
+    async def pause_consuming(self):
+        """
+        Prevent workers to get new messages from queue
+        """
+        if not self.__consuming_semaphore.locked():
+            await self.__consuming_semaphore.acquire()
+            logger.debug("Consuming was paused")
+
+    def continue_consuming(self):
+        """
+        Continue getting new messages from queue
+        """
+        if self.__consuming_semaphore.locked():
+            self.__consuming_semaphore.release()
+            logger.debug("Consuming was continued")
+
+    def is_paused(self) -> bool:
+        return self.__consuming_semaphore.locked()
 
     def add_route(self, routing_key: str, view):
         """
@@ -117,7 +137,7 @@ class DatabusApp:
             >>> app = DatabusApp(conf=conf, max_workers=1)
             >>> app.add_route(r'.*', my_view)
         """
-        self.router.add_route(routing_key, view)
+        self.__router.add_route(routing_key, view)
 
     def add_routes(self, routes: Dict[str, Coroutine[Dict, None, None]]):
         """
@@ -128,48 +148,48 @@ class DatabusApp:
             >>> app.add_routes(routes)
         """
         for key, view in routes.items():
-            self.router.add_route(key, view)
+            self.__router.add_route(key, view)
 
-    async def _get_routing_key_for_rpc(self, correlation_id):
+    async def __get_routing_key_for_rpc(self, correlation_id):
         route = await self.correlation_manager.find_request_by_correlation_id(correlation_id)
         if route:
             return route
         else:
             logger.warning(f"Got unknown correlation_id: {correlation_id}")
 
-    async def _serve_message(self, channel: Channel, body, envelope: Envelope, properties: Properties):
+    async def __serve_message(self, channel: Channel, body, envelope: Envelope, properties: Properties):
         try:
-            if envelope.routing_key == self.conf.queue_name and self.correlation_manager:
-                routing_key = await self._get_routing_key_for_rpc(properties.correlation_id)
+            if envelope.routing_key == self.__conf.queue_name and self.correlation_manager:
+                routing_key = await self.__get_routing_key_for_rpc(properties.correlation_id)
             else:
                 routing_key = envelope.routing_key
-            work_func = self.router.get_view(routing_key)
+            work_func = self.__router.get_view(routing_key)
             if not work_func:
                 logger.warning("Got message with routing key %s, but can't find right view", routing_key)
                 return
-            request = AmqpRequest(channel, body, envelope, properties)
-            await self.task_queue.put((work_func, request))
+            request = AmqpRequest(self, channel, body, envelope, properties)
+            await self.__task_queue.put((work_func, request))
         except ConnectionResetError as ex:
             logger.exception(ex)
             raise ex
 
-    async def _receive(self, reconnect: bool = True, reconnect_wait_period: int = 2):
+    async def __receive(self, reconnect: bool = True, reconnect_wait_period: int = 2):
         async def on_error_callback(exception):
             logger.debug('on_error_callback: %s', str(exception))
             if isinstance(exception, aioamqp.AmqpClosedConnection):
                 await asyncio.sleep(reconnect_wait_period)
-                await self._receive(reconnect, reconnect_wait_period)
+                await self.__receive(reconnect, reconnect_wait_period)
 
         transport = None
         try:
             transport, protocol = await aioamqp.connect(on_error=on_error_callback,
-                                                        host=self.conf.rabbit_host,
-                                                        login=self.conf.rabbit_username,
-                                                        password=self.conf.rabbit_password,
-                                                        virtualhost=self.conf.virtualhost)
+                                                        host=self.__conf.rabbit_host,
+                                                        login=self.__conf.rabbit_username,
+                                                        password=self.__conf.rabbit_password,
+                                                        virtualhost=self.__conf.virtualhost)
             channel = await protocol.channel()
-            await channel.basic_qos(prefetch_count=self.max_workers)
-            await channel.basic_consume(self._serve_message, queue_name=self.conf.queue_name, no_ack=False)
+            await channel.basic_qos(prefetch_count=self.__max_workers)
+            await channel.basic_consume(self.__serve_message, queue_name=self.__conf.queue_name, no_ack=False)
         except aioamqp.AmqpClosedConnection:
             logging.debug("AmqpClosedConnection, will call on_error")
         except (OSError, ConnectionRefusedError) as e:
@@ -178,7 +198,7 @@ class DatabusApp:
             if reconnect:
                 logger.warning(str(e))
                 await asyncio.sleep(reconnect_wait_period)
-                await self._receive(reconnect, reconnect_wait_period)
+                await self.__receive(reconnect, reconnect_wait_period)
             else:
                 raise e
 
@@ -193,35 +213,38 @@ class DatabusApp:
             logger.warning("Router handler %s doesn't returned valid response or returned NackResponse" % request.body)
             if request.envelope.delivery_tag:
                 await request.channel.basic_client_nack(delivery_tag=request.envelope.delivery_tag)
-            await asyncio.sleep(self.sleep_interval)
+            if self.sleep_interval:
+                await asyncio.sleep(self.sleep_interval)
 
-    async def _consume(self, worker_id):
+    async def __consume(self, worker_id):
         while True:
             # wait for an item from the producer
-            func, request = await self.task_queue.get()
-            try:
-                logger.debug("Worker %s started" % worker_id)
-                await self.__set_response(request, await func(request), worker_id)
-                self.task_queue.task_done()
-            except Exception as ex:
-                logger.exception(ex)
-                logger.warning("Worker %s going to sleep because of exception" % worker_id)
-                if request.envelope.delivery_tag:
-                    await request.channel.basic_client_nack(delivery_tag=request.envelope.delivery_tag)
-                await asyncio.sleep(self.sleep_interval)
+            if not self.__consuming_semaphore.locked():
+                func, request = await self.__task_queue.get()
+                try:
+                    logger.debug("Worker %s started" % worker_id)
+                    await self.__set_response(request, await func(request), worker_id)
+                    self.__task_queue.task_done()
+                except Exception as ex:
+                    logger.exception(ex)
+                    logger.warning("Worker %s going to sleep because of exception" % worker_id)
+                    if request.envelope.delivery_tag:
+                        await request.channel.basic_client_nack(delivery_tag=request.envelope.delivery_tag)
+                    if self.sleep_interval:
+                        await asyncio.sleep(self.sleep_interval)
             await asyncio.sleep(0.001)
 
-    async def _create_workers(self):
-        for worker_id in range(self.max_workers):
-            asyncio.create_task(self._consume(worker_id+1))
+    async def __create_workers(self):
+        for worker_id in range(self.__max_workers):
+            asyncio.create_task(self.__consume(worker_id+1))
 
     def start(self, loop):
         workers = []
         try:
             logger.info("Creating workers")
-            workers = loop.run_until_complete(self._create_workers())
+            workers = loop.run_until_complete(self.__create_workers())
             logger.info("Connecting to RabbitMQ")
-            loop.run_until_complete(self._receive())
+            loop.run_until_complete(self.__receive())
             loop.run_forever()
         except ConnectionRefusedError as ex:
             logger.warning(ex)

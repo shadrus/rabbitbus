@@ -28,7 +28,7 @@ from rabbitbus.acks.responses import AckResponse
 
 async def my_view(request: AmqpRequest):
     # Write your code here
-    return AckResponse()
+    return AckResponse(request)
 
 def serve():
     loop = asyncio.get_event_loop()
