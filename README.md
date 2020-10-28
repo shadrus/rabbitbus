@@ -41,3 +41,17 @@ def serve():
 if __name__ == '__main__':
     serve()
 ```
+
+If message has reply_to property, you can make response like
+
+```python
+from rabbitbus.acks.requests import AmqpRequest
+from rabbitbus.acks.responses import AckResponse
+
+async def my_view(request: AmqpRequest):
+    # Write your code here
+    return AckResponse(request, data={"result": 1})
+```
+
+"reply_to" will be converted to the "routing_key" and message will be published to the app exchange.
+More about RPC you can read [in RabbitMQ documentation](https://www.rabbitmq.com/tutorials/tutorial-six-python.html)
