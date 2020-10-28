@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 import logging
 from time import sleep
@@ -52,7 +53,6 @@ class CorrelationManager:
     """
 
     async def find_request_by_correlation_id(self, correlation_id: str) -> str:
-
         """
         Args:
             correlation_id: correlation id from RPC
@@ -102,9 +102,12 @@ class DatabusApp:
             self.correlation_manager = None
         self.__conf: Configuration = conf
         self.__router = RouteManager()
-        self.__task_queue: asyncio.Queue[Tuple[Callable[[AmqpRequest], Awaitable[None]], AmqpRequest]] = asyncio.Queue()
+        self.__task_queue: asyncio.Queue[Tuple[
+            Callable[[AmqpRequest], Awaitable[None]], AmqpRequest]] = asyncio.Queue(
+            maxsize=max_workers)
         self.__max_workers = max_workers
         self.__consuming_semaphore = asyncio.Semaphore(1)
+        self.channel: Channel = None
 
     async def pause_consuming(self):
         """
@@ -151,21 +154,38 @@ class DatabusApp:
             self.__router.add_route(key, view)
 
     async def __get_routing_key_for_rpc(self, correlation_id):
-        route = await self.correlation_manager.find_request_by_correlation_id(correlation_id)
+        route = await self.correlation_manager.find_request_by_correlation_id(
+            correlation_id)
         if route:
             return route
         else:
             logger.warning(f"Got unknown correlation_id: {correlation_id}")
 
-    async def __serve_message(self, channel: Channel, body, envelope: Envelope, properties: Properties):
+    def __prepare_data(self, data):
+        if isinstance(data, list) or isinstance(data, dict):
+            return json.dumps(data)
+        else:
+            return str(data)
+
+    async def send_message(self, data, routing_key: str, properties: Properties):
+        await self.channel.publish(payload=self.__prepare_data(data),
+                                   exchange_name=self.__conf.exchange_name,
+                                   routing_key=routing_key,
+                                   properties=properties)
+
+    async def __serve_message(self, channel: Channel, body, envelope: Envelope,
+                              properties: Properties):
         try:
             if envelope.routing_key == self.__conf.queue_name and self.correlation_manager:
-                routing_key = await self.__get_routing_key_for_rpc(properties.correlation_id)
+                routing_key = await self.__get_routing_key_for_rpc(
+                    properties.correlation_id)
             else:
                 routing_key = envelope.routing_key
             work_func = self.__router.get_view(routing_key)
             if not work_func:
-                logger.warning("Got message with routing key %s, but can't find right view", routing_key)
+                logger.warning(
+                    "Got message with routing key %s, but can't find right view",
+                    routing_key)
                 return
             request = AmqpRequest(self, channel, body, envelope, properties)
             await self.__task_queue.put((work_func, request))
@@ -187,9 +207,11 @@ class DatabusApp:
                                                         login=self.__conf.rabbit_username,
                                                         password=self.__conf.rabbit_password,
                                                         virtualhost=self.__conf.virtualhost)
-            channel = await protocol.channel()
-            await channel.basic_qos(prefetch_count=self.__max_workers)
-            await channel.basic_consume(self.__serve_message, queue_name=self.__conf.queue_name, no_ack=False)
+            self.channel = await protocol.channel()
+            await self.channel.basic_qos(prefetch_count=self.__max_workers)
+            await self.channel.basic_consume(self.__serve_message,
+                                             queue_name=self.__conf.queue_name,
+                                             no_ack=False)
         except aioamqp.AmqpClosedConnection:
             logging.debug("AmqpClosedConnection, will call on_error")
         except (OSError, ConnectionRefusedError) as e:
@@ -202,17 +224,26 @@ class DatabusApp:
             else:
                 raise e
 
-    async def __set_response(self, request: AmqpRequest, response: Union[AckResponse, NackResponse, None], worker_id):
+    async def __set_response(self, request: AmqpRequest,
+                             response: Union[AckResponse, NackResponse, None],
+                             worker_id):
         if isinstance(response, AckResponse):
             if request.properties.reply_to:
-                pass  # TODO send data to exchange
+                await self.send_message(response.data,
+                                        routing_key=request.properties.reply_to,
+                                        properties={
+                                            "correlation_id": request.properties.correlation_id}
+                                        )
             if request.envelope.delivery_tag:
-                await request.channel.basic_client_ack(delivery_tag=request.envelope.delivery_tag)
+                await request.channel.basic_client_ack(
+                    delivery_tag=request.envelope.delivery_tag)
             logger.debug("Worker %s completed the task" % worker_id)
         else:
-            logger.warning("Router handler %s doesn't returned valid response or returned NackResponse" % request.body)
+            logger.warning(
+                "Router handler %s doesn't returned valid response or returned NackResponse" % request.body)
             if request.envelope.delivery_tag:
-                await request.channel.basic_client_nack(delivery_tag=request.envelope.delivery_tag)
+                await request.channel.basic_client_nack(
+                    delivery_tag=request.envelope.delivery_tag)
             if self.sleep_interval:
                 await asyncio.sleep(self.sleep_interval)
 
@@ -227,16 +258,18 @@ class DatabusApp:
                     self.__task_queue.task_done()
                 except Exception as ex:
                     logger.exception(ex)
-                    logger.warning("Worker %s going to sleep because of exception" % worker_id)
+                    logger.warning(
+                        "Worker %s going to sleep because of exception" % worker_id)
                     if request.envelope.delivery_tag:
-                        await request.channel.basic_client_nack(delivery_tag=request.envelope.delivery_tag)
+                        await request.channel.basic_client_nack(
+                            delivery_tag=request.envelope.delivery_tag)
                     if self.sleep_interval:
                         await asyncio.sleep(self.sleep_interval)
             await asyncio.sleep(0.001)
 
     async def __create_workers(self):
         for worker_id in range(self.__max_workers):
-            asyncio.create_task(self.__consume(worker_id+1))
+            asyncio.create_task(self.__consume(worker_id + 1))
 
     def start(self, loop):
         workers = []
