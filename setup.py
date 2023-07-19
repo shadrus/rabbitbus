@@ -17,13 +17,13 @@ DESCRIPTION = 'RabbitMQ app framework'
 URL = 'https://github.com/shadrus/rabbitbus'
 EMAIL = 'krylov.ys@malltech.ru'
 AUTHOR = 'KrylovYS'
-REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.1.1'
+REQUIRES_PYTHON = '>=3.7.0'
+VERSION = '0.1.2'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
     # 'requests', 'maya', 'records',
-    'aioamqp==0.14.0'
+    'aioamqp==0.15.0'
 ]
 
 # What packages are optional?
@@ -120,9 +120,10 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy'
     ],

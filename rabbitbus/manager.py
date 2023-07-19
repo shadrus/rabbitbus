@@ -161,7 +161,7 @@ class DatabusApp:
         else:
             logger.warning(f"Got unknown correlation_id: {correlation_id}")
 
-    def __prepare_data(self, data):
+    def __prepare_data(self, data) -> str:
         if isinstance(data, list) or isinstance(data, dict):
             return json.dumps(data)
         else:
@@ -213,7 +213,7 @@ class DatabusApp:
                                              queue_name=self.__conf.queue_name,
                                              no_ack=False)
         except aioamqp.AmqpClosedConnection:
-            logging.debug("AmqpClosedConnection, will call on_error")
+            logging.warning("AmqpClosedConnection, will call on_error")
         except (OSError, ConnectionRefusedError) as e:
             if transport and not transport.is_closing():
                 await transport.close()
@@ -231,8 +231,7 @@ class DatabusApp:
             if request.properties.reply_to:
                 await self.send_message(response.data,
                                         routing_key=request.properties.reply_to,
-                                        properties={
-                                            "correlation_id": request.properties.correlation_id}
+                                        properties=Properties(correlation_id=request.properties.correlation_id)
                                         )
             if request.envelope.delivery_tag:
                 await request.channel.basic_client_ack(
